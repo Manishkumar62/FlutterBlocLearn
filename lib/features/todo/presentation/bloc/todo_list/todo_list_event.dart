@@ -16,3 +16,13 @@ class TodoListFetched extends TodoListEvent {
 class TodoListLoadMore extends TodoListEvent {
   const TodoListLoadMore();
 }
+
+
+// Search query changed
+class TodoListSearchQueryChanged extends TodoListEvent {
+  final String query;
+  const TodoListSearchQueryChanged(this.query);
+
+  @override
+  List<Object?> get props => [query];
+}

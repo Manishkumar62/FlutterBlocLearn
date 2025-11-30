@@ -80,7 +80,37 @@ class _TodoListPageState extends State<TodoListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Todos')),
+      appBar: AppBar(
+        title: const Text('Todos'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search todos...',
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 0,
+                  ),
+                ),
+                onChanged: (value) {
+                  context.read<TodoListBloc>().add(
+                    TodoListSearchQueryChanged(value),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
       body: BlocBuilder<TodoListBloc, TodoListState>(
         builder: (context, state) {
           if (state.isLoading && state.todos.isEmpty) {
@@ -121,15 +151,18 @@ class _TodoListPageState extends State<TodoListPage> {
             );
           }
 
+          final isSearching = state.searchQuery.isNotEmpty;
+          final todosToShow = isSearching ? state.filteredTodos : state.todos;
+
           return RefreshIndicator(
             onRefresh: _onRefresh,
             child: ListView.separated(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: state.todos.length + 1, // +1 for bottom loader
+              itemCount: todosToShow.length + (isSearching ? 0 : 1),
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
-                if (index == state.todos.length) {
+                if (!isSearching && index == todosToShow.length) {
                   // bottom loader / no-more label
                   if (state.isLoadingMore) {
                     return const Padding(
@@ -151,7 +184,7 @@ class _TodoListPageState extends State<TodoListPage> {
                   return const SizedBox.shrink();
                 }
 
-                final todo = state.todos[index];
+                final todo = todosToShow[index];
                 return ListTile(
                   title: Text(todo.title),
                   subtitle: Text('ID: ${todo.id}  •  User: ${todo.userId}'),

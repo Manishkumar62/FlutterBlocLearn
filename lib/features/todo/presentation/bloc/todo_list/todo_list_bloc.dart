@@ -1,9 +1,14 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:rxdart/rxdart.dart';
 
 import '../../../domain/entities/todo_entity.dart';
 import '../../../domain/usecases/get_todos_usecase.dart';
 import 'todo_list_event.dart';
 import 'todo_list_state.dart';
+
+EventTransformer<E> debounce<E>(Duration duration) {
+  return (events, mapper) => events.debounceTime(duration).switchMap(mapper);
+}
 
 class TodoListBloc extends Bloc<TodoListEvent, TodoListState> {
   final GetTodosUseCase getTodosUseCase;
@@ -17,6 +22,10 @@ class TodoListBloc extends Bloc<TodoListEvent, TodoListState> {
   }) : super(TodoListState.initial()) {
     on<TodoListFetched>(_onFetched);
     on<TodoListLoadMore>(_onLoadMore);
+    on<TodoListSearchQueryChanged>(
+      _onSearchChanged,
+      transformer: debounce(const Duration(milliseconds: 300)),
+    );
   }
 
   Future<void> _onFetched(
@@ -42,8 +51,11 @@ class TodoListBloc extends Bloc<TodoListEvent, TodoListState> {
         limit: _limit,
       );
 
+      final filtered = _applySearch(todos, state.searchQuery);
+
       emit(state.copyWith(
         todos: todos,
+        filteredTodos: filtered,
         isLoading: false,
         isRefreshing: false,
         hasMore: todos.length == _limit,
@@ -81,8 +93,11 @@ class TodoListBloc extends Bloc<TodoListEvent, TodoListState> {
 
       final allTodos = List<TodoEntity>.from(state.todos)..addAll(newTodos);
 
+      final filtered = _applySearch(allTodos, state.searchQuery);
+
       emit(state.copyWith(
         todos: allTodos,
+        filteredTodos: filtered,
         isLoadingMore: false,
         hasMore: newTodos.length == _limit,
       ));
@@ -97,4 +112,30 @@ class TodoListBloc extends Bloc<TodoListEvent, TodoListState> {
       _isFetching = false;
     }
   }
+
+  List<TodoEntity> _applySearch(List<TodoEntity> todos, String query) {
+    if (query.isEmpty) return todos;
+
+    final lower = query.toLowerCase();
+    return todos
+        .where((t) => t.title.toLowerCase().contains(lower))
+        .toList();
+  }
+
+  Future<void> _onSearchChanged(
+    TodoListSearchQueryChanged event,
+    Emitter<TodoListState> emit,
+  ) async {
+    final query = event.query;
+    final filtered = _applySearch(state.todos, query);
+
+    emit(
+      state.copyWith(
+        searchQuery: query,
+        filteredTodos: filtered,
+        // keep rest same
+      ),
+    );
+  }
+
 }
