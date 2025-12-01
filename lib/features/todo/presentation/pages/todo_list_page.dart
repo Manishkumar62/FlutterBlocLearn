@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../../../features/auth/presentation/bloc/auth_event.dart';
 import '../bloc/todo_list/todo_list_bloc.dart';
 import '../bloc/todo_list/todo_list_event.dart';
 import '../bloc/todo_list/todo_list_state.dart';
@@ -111,6 +113,30 @@ class _TodoListPageState extends State<TodoListPage> {
           ),
         ),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        label: const Text('Logout'),
+        icon: const Icon(Icons.logout),
+        backgroundColor: Colors.red,
+        // onPressed: () {
+        //   // Dispatch logout event
+        //   context.read<AuthBloc>().add(AuthLoggedOut());
+        // },
+        onPressed: () {
+          print('LOGOUT BTN pressed — looking for AuthBloc...');
+          try {
+            final bloc = context.read<AuthBloc>();
+            print('AuthBloc found: $bloc');
+            bloc.add(AuthLoggedOut());
+            print('AuthLoggedOut event added');
+          } catch (e) {
+            print('ERROR: AuthBloc not found in context: $e');
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('AuthBloc not found: $e')));
+          }
+        },
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: BlocBuilder<TodoListBloc, TodoListState>(
         builder: (context, state) {
           if (state.isLoading && state.todos.isEmpty) {
