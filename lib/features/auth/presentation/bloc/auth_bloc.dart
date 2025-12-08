@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import '../../../../core/secure_storage/token_storage.dart';
 import '../../domain/usecases/refresh_token_usecase.dart';
+import '../../../../../core/network/jwt_utils.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -111,16 +112,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final access = state.accessToken ?? await tokenStorage.readAccessToken();
     final refresh = state.refreshToken ?? await tokenStorage.readRefreshToken();
 
+    // If access + refresh present and access is NOT near expiry => nothing to do.
     if (access != null && refresh != null) {
-      // check expiry using jwt_utils
-      final fromJwt = access;
-      try {
-        // import here to avoid circular imports at top-level:
-        // but you can import core/network/jwt_utils.dart at top if you prefer
-        // Use the helper isTokenExpired
-        // To avoid explicit import here, assume you imported it above.
-      } catch (_) {}
-      // We'll check expiry by reading jwt_utils.isTokenExpired
+      // Use jwt util to check expiry. If it's still valid, return true immediately.
+      if (!isTokenExpired(access, graceSeconds: 60)) {
+        return true;
+      }
     }
 
     // If in refreshing state, wait for existing completer
