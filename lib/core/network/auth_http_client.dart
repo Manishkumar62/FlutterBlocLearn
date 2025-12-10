@@ -1,14 +1,14 @@
+// lib/core/network/auth_http_client.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../secure_storage/token_storage.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
-import '../../features/auth/presentation/bloc/auth_state.dart';
 import '../../features/auth/presentation/bloc/auth_event.dart';
 import '../../core/network/jwt_utils.dart';
 
-/// A BaseClient wrapper that automatically adds Authorization header,
-/// detects 401 -> triggers refresh using AuthBloc -> retries request once.
+/// AuthHttpClient: adds Authorization header, proactively triggers refresh
+/// when access near-expiry, and on 401 attempts one refresh+retry then stops.
 class AuthHttpClient extends http.BaseClient {
   final http.Client _inner;
   final TokenStorage _tokenStorage;
@@ -24,78 +24,74 @@ class AuthHttpClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    // Clone request body if needed
+    // Read current access token
     final access = await _tokenStorage.readAccessToken();
 
     if (access != null) {
-      // if token is near expiry, request refresh proactively (background)
+      // If access is near expiry, trigger background refresh (optimistic)
       if (isTokenExpired(access, graceSeconds: 60)) {
-        // trigger refresh but do not wait for it to complete (optimistic)
-        unawaited(_authBloc.ensureToken());
+        // unawaited background ensureToken so we don't block every request
+        _unawaited(_authBloc.ensureToken());
       }
-
       request.headers['Authorization'] = 'Bearer $access';
     }
 
-    http.StreamedResponse response = await _inner.send(request);
-
-    // --- NEW: safety guard to avoid infinite retry loops ---
+    // Read current retry-count (custom header). Default 0.
     final int retryCount = int.tryParse(request.headers['x-retry-count'] ?? '0') ?? 0;
 
-    // If 401 -> try refresh and retry once
-    if (response.statusCode == 401) {
+    final response = await _inner.send(request);
 
-      // If already retried once, do NOT attempt refresh again.
+    // If server responds 401, attempt refresh + one retry (only once)
+    if (response.statusCode == 401) {
+      // If we've already retried once, do not retry again (avoid loops)
       if (retryCount >= 1) {
-        // Option A: force logout (safer)
+        // safer to force logout so app doesn't loop forever
         _authBloc.add(AuthLoggedOut());
-        return response; // return original 401
+        return response;
       }
 
+      // Drain original response to avoid stream leak
+      await http.Response.fromStream(response);
 
-      // Drain body to avoid leak
-      final body = await http.Response.fromStream(response);
-      final bodyText = body.body;
-      // Try to refresh
+      // Try to refresh token
       final refreshed = await _authBloc.ensureToken();
       if (!refreshed) {
         // refresh failed -> force logout
         _authBloc.add(AuthLoggedOut());
-        return response; // original 401
+        return response;
       }
 
-      // read new access token
+      // Get new access token
       final newAccess = await _tokenStorage.readAccessToken();
       if (newAccess == null) {
         _authBloc.add(AuthLoggedOut());
         return response;
       }
 
-      // Recreate the original request to retry
-      final newRequest = _copyRequest(request, newAccess);
+      // Recreate original request and increment retry count
+      final newRequest = _copyRequestWithRetry(request, newAccess, retryCount + 1);
       return _inner.send(newRequest);
     }
 
     return response;
   }
 
-  // Helper to copy request with same method, url, headers, body
-  http.BaseRequest _copyRequest(http.BaseRequest request, String accessToken) {
+  // Clone request (method, url, headers, body) and set Authorization + retry header
+  http.BaseRequest _copyRequestWithRetry(http.BaseRequest request, String accessToken, int newRetryCount) {
     final newRequest = http.Request(request.method, request.url);
-    newRequest.headers.addAll(request.headers);
 
-    // increment retry count on clone (important)
-    final prev = int.tryParse(newRequest.headers['x-retry-count'] ?? '0') ?? 0;
-    newRequest.headers['x-retry-count'] = (prev + 1).toString();
-    
+    // copy headers, then overwrite Authorization and x-retry-count
+    newRequest.headers.addAll(request.headers);
     newRequest.headers['Authorization'] = 'Bearer $accessToken';
+    newRequest.headers['x-retry-count'] = '$newRetryCount';
 
     if (request is http.Request) {
       newRequest.bodyBytes = request.bodyBytes;
     }
+
     return newRequest;
   }
 }
 
-// simple unawaited helper
-void unawaited(Future<dynamic> f) {}
+// Helper to fire-and-forget Futures (avoid returning Null)
+void _unawaited(Future<dynamic> f) {}
