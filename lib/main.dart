@@ -33,6 +33,7 @@ import 'features/auth/presentation/pages/login_page.dart';
 import 'core/secure_storage/token_storage.dart';
 import 'core/network/auth_http_client.dart';
 import 'core/network/jwt_utils.dart';
+import 'core/network/refresh_manager.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -69,11 +70,19 @@ void main() async {
   // start auth restore
   authBloc.add(AuthStarted());
 
+  // create manager
+  final refreshManager = RefreshManager(
+    refreshUseCase: refreshUseCase,
+    tokenStorage: tokenStorage,
+    authBloc: authBloc,
+  );
+
   // Provide an auth-aware HTTP client to other features
   final authHttpClient = AuthHttpClient(
     inner: client,
     tokenStorage: tokenStorage,
     authBloc: authBloc,
+    refreshManager: refreshManager,
   );
 
   // 3) Todo DI with authHttpClient

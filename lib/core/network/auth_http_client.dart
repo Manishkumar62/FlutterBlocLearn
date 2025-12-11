@@ -1,39 +1,52 @@
 // lib/core/network/auth_http_client.dart
 import 'dart:async';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../secure_storage/token_storage.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/bloc/auth_event.dart';
 import '../../core/network/jwt_utils.dart';
+import '../network/refresh_manager.dart'; // <-- new
 
-/// AuthHttpClient: adds Authorization header, proactively triggers refresh
-/// when access near-expiry, and on 401 attempts one refresh+retry then stops.
+/// AuthHttpClient: adds Authorization header and integrates RefreshManager
 class AuthHttpClient extends http.BaseClient {
   final http.Client _inner;
   final TokenStorage _tokenStorage;
   final AuthBloc _authBloc;
+  final RefreshManager _refreshManager; // new dependency
 
   AuthHttpClient({
     required http.Client inner,
     required TokenStorage tokenStorage,
     required AuthBloc authBloc,
+    required RefreshManager refreshManager,
   })  : _inner = inner,
         _tokenStorage = tokenStorage,
-        _authBloc = authBloc;
+        _authBloc = authBloc,
+        _refreshManager = refreshManager;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     // Read current access token
-    final access = await _tokenStorage.readAccessToken();
+    var access = await _tokenStorage.readAccessToken();
 
     if (access != null) {
-      // If access is near expiry, trigger background refresh (optimistic)
-      if (isTokenExpired(access, graceSeconds: 60)) {
-        // unawaited background ensureToken so we don't block every request
-        _unawaited(_authBloc.ensureToken());
+      // If access is near expiry, BLOCK and refresh so the request uses fresh token.
+      // This avoids an immediate 401 and makes UX seamless.
+      final needsRefresh = isTokenExpired(access, graceSeconds: 60);
+      if (needsRefresh) {
+        final refreshed = await _refreshManager.refreshIfNeeded(graceSeconds: 60);
+        if (!refreshed) {
+          // refresh failed -> logout already triggered by manager
+          // return a synthetic 401 response or let the server decide.
+          // We'll attempt to continue and let server respond; but header won't contain Authorization.
+        } else {
+          // read updated access
+          access = await _tokenStorage.readAccessToken();
+        }
       }
-      request.headers['Authorization'] = 'Bearer $access';
+      if (access != null) {
+        request.headers['Authorization'] = 'Bearer $access';
+      }
     }
 
     // Read current retry-count (custom header). Default 0.
@@ -45,7 +58,6 @@ class AuthHttpClient extends http.BaseClient {
     if (response.statusCode == 401) {
       // If we've already retried once, do not retry again (avoid loops)
       if (retryCount >= 1) {
-        // safer to force logout so app doesn't loop forever
         _authBloc.add(AuthLoggedOut());
         return response;
       }
@@ -53,10 +65,9 @@ class AuthHttpClient extends http.BaseClient {
       // Drain original response to avoid stream leak
       await http.Response.fromStream(response);
 
-      // Try to refresh token
-      final refreshed = await _authBloc.ensureToken();
+      // Force refresh (single-flight ensured by manager)
+      final refreshed = await _refreshManager.forceRefresh();
       if (!refreshed) {
-        // refresh failed -> force logout
         _authBloc.add(AuthLoggedOut());
         return response;
       }
@@ -87,11 +98,17 @@ class AuthHttpClient extends http.BaseClient {
 
     if (request is http.Request) {
       newRequest.bodyBytes = request.bodyBytes;
+    } else if (request is http.MultipartRequest) {
+      final m = http.MultipartRequest(request.method, request.url);
+      m.headers.addAll(request.headers);
+      m.fields.addAll(request.fields);
+      m.files.addAll(request.files);
+      final prev = int.tryParse(m.headers['x-retry-count'] ?? '0') ?? 0;
+      m.headers['x-retry-count'] = (prev + 1).toString();
+      m.headers['Authorization'] = 'Bearer $accessToken';
+      return m;
     }
 
     return newRequest;
   }
 }
-
-// Helper to fire-and-forget Futures (avoid returning Null)
-void _unawaited(Future<dynamic> f) {}

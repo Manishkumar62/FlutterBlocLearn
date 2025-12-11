@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:http/http.dart' as http;
 import 'package:firstassignbloc/core/network/auth_http_client.dart';
+import 'package:firstassignbloc/core/network/refresh_manager.dart';
 import 'package:firstassignbloc/core/secure_storage/token_storage.dart';
 import 'package:firstassignbloc/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:firstassignbloc/features/auth/presentation/bloc/auth_event.dart';
@@ -13,13 +14,13 @@ import 'package:firstassignbloc/features/auth/presentation/bloc/auth_event.dart'
 class MockHttpClient extends Mock implements http.Client {}
 class MockTokenStorage extends Mock implements TokenStorage {}
 class MockAuthBloc extends Mock implements AuthBloc {}
+class MockRefreshManager extends Mock implements RefreshManager {}
 
-// Fallback Fake types required by mocktail for any() on non-primitive types
+// Fallbacks for mocktail
 class FakeBaseRequest extends Fake implements http.BaseRequest {}
-class FakeAuthEvent extends Fake implements AuthEvent {} // <-- implement AuthEvent
+class FakeAuthEvent extends Fake implements AuthEvent {}
 
 void main() {
-  // Register fallback values once for mocktail (before any usage)
   setUpAll(() {
     registerFallbackValue(FakeBaseRequest());
     registerFallbackValue(FakeAuthEvent());
@@ -28,21 +29,34 @@ void main() {
   late MockHttpClient inner;
   late MockTokenStorage tokenStorage;
   late MockAuthBloc authBloc;
+  late MockRefreshManager refreshManager;
   late AuthHttpClient client;
 
   setUp(() {
     inner = MockHttpClient();
     tokenStorage = MockTokenStorage();
     authBloc = MockAuthBloc();
+    refreshManager = MockRefreshManager();
 
-    // Default stub: ensureToken returns false unless a test overrides it.
-    when(() => authBloc.ensureToken()).thenAnswer((_) async => false);
+    // Default: make refreshManager methods return safely (avoid null)
+    when(() => refreshManager.refreshIfNeeded()).thenAnswer((_) async => true);
+    when(() => refreshManager.forceRefresh()).thenAnswer((_) async => true);
 
-    client = AuthHttpClient(inner: inner, tokenStorage: tokenStorage, authBloc: authBloc);
+    // Also stub token storage write methods so future awaits don't fail when refresh manager writes
+    when(() => tokenStorage.saveAccessToken(any())).thenAnswer((_) async {});
+    when(() => tokenStorage.saveRefreshToken(any())).thenAnswer((_) async {});
+
+    client = AuthHttpClient(
+      inner: inner,
+      tokenStorage: tokenStorage,
+      authBloc: authBloc,
+      refreshManager: refreshManager,
+    );
   });
 
   test('succeeds when access token present and request returns 200', () async {
     when(() => tokenStorage.readAccessToken()).thenAnswer((_) async => 'valid-access');
+    // ensure jwt_utils.isTokenExpired will treat 'valid-access' as not expired in test context.
     final streamed = http.StreamedResponse(Stream.fromIterable([utf8.encode('ok')]), 200);
     when(() => inner.send(any())).thenAnswer((_) async => streamed);
 
@@ -50,7 +64,6 @@ void main() {
     final resp = await client.send(req);
 
     expect(resp.statusCode, 200);
-    // allow >=1 since the client might attempt proactive refresh in background
     verify(() => inner.send(any())).called(greaterThanOrEqualTo(1));
   });
 
@@ -62,7 +75,6 @@ void main() {
     final resp401 = http.StreamedResponse(Stream.fromIterable([utf8.encode('unauth')]), 401);
     final resp200 = http.StreamedResponse(Stream.fromIterable([utf8.encode('ok')]), 200);
 
-    // We need to capture the first call, then second call.
     var call = 0;
     final captured = <http.BaseRequest>[];
     when(() => inner.send(any())).thenAnswer((inv) async {
@@ -72,8 +84,8 @@ void main() {
       return call == 1 ? resp401 : resp200;
     });
 
-    // authBloc.ensureToken() should be invoked and return true (simulate refresh succeeded)
-    when(() => authBloc.ensureToken()).thenAnswer((_) async => true);
+    // refreshManager.forceRefresh() should be invoked and return true (simulate refresh succeeded)
+    when(() => refreshManager.forceRefresh()).thenAnswer((_) async => true);
 
     // After refresh, tokenStorage returns new token
     when(() => tokenStorage.readAccessToken()).thenAnswer((_) async => 'new-access');
@@ -82,34 +94,26 @@ void main() {
     final res = await client.send(req);
 
     expect(res.statusCode, 200);
-    // ensureToken should have been called at least once
-    verify(() => authBloc.ensureToken()).called(greaterThanOrEqualTo(1));
-    // inner.send should have been called at least twice (initial + retry)
+    verify(() => refreshManager.forceRefresh()).called(greaterThanOrEqualTo(1));
     verify(() => inner.send(any())).called(greaterThanOrEqualTo(2));
 
-    // optional: assert that the retried request had x-retry-count == '1'
     if (captured.length >= 2) {
-      expect(captured[1].headers['x-retry-count'] == '1' || captured[1].headers.containsKey('x-retry-count'), isTrue);
+      expect(captured[1].headers['Authorization'], contains('new-access'));
     }
   });
 
   test('on 401 and refresh fails triggers logout', () async {
     when(() => tokenStorage.readAccessToken()).thenAnswer((_) async => 'expired-access');
     final resp401 = http.StreamedResponse(Stream.fromIterable([utf8.encode('unauth')]), 401);
-
-    // inner always returns 401
     when(() => inner.send(any())).thenAnswer((_) async => resp401);
 
-    // ensureToken returns false (default), but make explicit for clarity
-    when(() => authBloc.ensureToken()).thenAnswer((_) async => false);
+    when(() => refreshManager.forceRefresh()).thenAnswer((_) async => false);
 
     final req = http.Request('GET', Uri.parse('https://example.com/test'));
     final res = await client.send(req);
 
-    // still 401
     expect(res.statusCode, 401);
-    verify(() => authBloc.ensureToken()).called(greaterThanOrEqualTo(1));
-    // authBloc.add should be called at least once (AuthLoggedOut)
+    verify(() => refreshManager.forceRefresh()).called(greaterThanOrEqualTo(1));
     verify(() => authBloc.add(any())).called(greaterThanOrEqualTo(1));
   });
 }
