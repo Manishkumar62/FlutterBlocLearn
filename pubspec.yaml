@@ -40,6 +40,8 @@ dependencies:
   http: ^0.13.6
   flutter_secure_storage: ^8.0.0
   formz: ^0.4.0
+  bloc_concurrency: ^0.2.5
+  stream_transform: ^2.1.0
 
 dev_dependencies:
   flutter_test:
