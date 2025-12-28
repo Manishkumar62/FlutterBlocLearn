@@ -79,6 +79,8 @@ The app follows a **feature-based Clean Architecture** approach:
 
 
 **Data flow:**
+
+1. Clone the repository:
     ```bash
     UI-Bloc-UseCase-Repository-DataSource-API
 
