@@ -77,7 +77,7 @@ Key objectives:
     ├── secure_storage/
     └── common utilities
 
-2. **Data flow:**:
+2. **Data flow**:
     ```bash
     UI -> Bloc -> UseCase -> Repository -> DataSource -> API
 
