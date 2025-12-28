@@ -29,47 +29,75 @@ Key objectives:
 
 ### Key Engineering Concepts Implemented
 
-- Clean Architecture (Domain / Data / Presentation)
+- Clean Architecture
     - Domain / Data / Presentation separation
     - UseCases isolate business logic
     - UI depends only on abstractions
-- BLoC with event transformers (`droppable`, `sequential`, `debounce`)
-- JWT-based authentication
-- Secure token storage
+- BLoC State Management
+    - Event → State driven UI
+    - No direct API calls from UI
+    - Predictable state transitions
+- Authentication & Security
+    - JWT-based authentication
+    - Access token + refresh token
+    - Secure token storage
+    - Automatic token refresh on expiry
 - **Single-flight refresh token mechanism**
-- Pagination with state preservation
-- Search with debounce
-- Robust error handling
-- High-quality automated tests
+    - Ensures only one refresh request runs at a time
+    - Concurrent API calls wait on the same refresh Future
+    - Prevents refresh storms and race conditions
+    - Graceful logout on refresh failure
+- Pagination & Search
+    - Ordered pagination using `sequential()` transformer
+    - Search with debounce using `debounce()` transformer
+    - State preserved across pagination & search
+- Robust Testing Strategy
+    - Unit tests for UseCases
+    - BLoC tests for success, error, pagination & search
+    - Concurrency tests for refresh token logic
+    - JWT expiry tested using real token payloads
 
 ---
 
 ### Architecture Overview
 
 The app follows a **feature-based Clean Architecture** approach:
-
-features/
-├── auth/
-├── todo/
-core/
-├── network/
-├── secure_storage/
+    ```kotlin
+    features/
+    ├── auth/
+    │   ├── domain/
+    │   ├── data/
+    │   └── presentation/
+    │
+    ├── todo/
+    │   ├── domain/
+    │   ├── data/
+    │   └── presentation/
+    │
+    core/
+    ├── network/
+    ├── secure_storage/
+    └── common utilities
 
 
 **Data flow:**
+    ```nginx
+    UI → Bloc → UseCase → Repository → DataSource → API
 
-UI → Bloc → UseCase → Repository → DataSource → API
+- UI dispatches events
+- Bloc coordinates state changes
+- UseCases contain business rules
+- Repositories abstract data sources
+- DataSources handle API / storage
 
-
-
-This structure ensures:
-- Clear separation of concerns
+This ensures:
 - Easy testing
-- Long-term maintainability
+- Clear responsibility boundaries
+- Maintainable, scalable code
 
 ---
 
-### Authentication & Token Refresh
+### Authentication & Token Refresh Flow
 
 - Login returns access & refresh tokens
 - Tokens are stored securely
