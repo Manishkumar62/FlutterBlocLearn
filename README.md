@@ -61,7 +61,7 @@ Key objectives:
 
 ### 🏗️ Architecture Overview
 
-The app follows a **feature-based Clean Architecture** approach:
+1. The app follows a **feature-based Clean Architecture** approach:
     ```bash
     features/
     ├── auth/
@@ -77,12 +77,9 @@ The app follows a **feature-based Clean Architecture** approach:
     ├── secure_storage/
     └── common utilities
 
-
-**Data flow:**
-
-1. Clone the repository:
+2. **Data flow:**:
     ```bash
-    UI-Bloc-UseCase-Repository-DataSource-API
+    UI -> Bloc -> UseCase -> Repository -> DataSource -> API
 
 - UI dispatches events
 - Bloc coordinates state changes
