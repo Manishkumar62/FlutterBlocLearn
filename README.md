@@ -1,9 +1,9 @@
-# firstassignbloc
+# Flutter Todo App — Clean Architecture, BLoC & Secure Auth
 
 A production-style Flutter application demonstrating **Clean Architecture**,  
-**BLoC state management**, **secure authentication**, and **comprehensive testing**.
+**BLoC state management**, **JWT authentication with single-flight refresh**, **pagination**, **debounced search**, and **comprehensive unit & BLoC testing**.
 
-This project focuses on **engineering correctness and scalability**, not just UI.
+This project focuses on **engineering correctness**, **scalability**, and **testability** not just UI.
 
 ---
 
@@ -11,22 +11,28 @@ This project focuses on **engineering correctness and scalability**, not just UI
 
 This Flutter app is built to showcase real-world application patterns commonly used in production systems.
 
-### Project Purpose
+### Project Objective
 
-The main objective of this project is to:
+The goal of this project is to practice and demonstrate **real-world Flutter application architecture** and patterns commonly used in production mobile apps.
 
-- Implement a scalable Flutter architecture using **Clean Architecture**
-- Manage state predictably using **BLoC**
-- Handle authentication securely with **JWT access & refresh tokens**
-- Prevent multiple refresh calls using a **single-flight refresh mechanism**
+Key objectives:
+
+- Build a scalable Flutter app using **Clean Architecture**
+- Implement **secure authentication** with access & refresh tokens
+- Handle token expiry safely using a **single-flight refresh mechanism**
+- Manage state using **BLoC with proper event transformers**
 - Implement pagination and debounced search correctly
 - Write meaningful **unit tests, BLoC tests, and concurrency tests**
 
+
 ---
 
-### Key Features
+### Key Engineering Concepts Implemented
 
 - Clean Architecture (Domain / Data / Presentation)
+    - Domain / Data / Presentation separation
+    - UseCases isolate business logic
+    - UI depends only on abstractions
 - BLoC with event transformers (`droppable`, `sequential`, `debounce`)
 - JWT-based authentication
 - Secure token storage
