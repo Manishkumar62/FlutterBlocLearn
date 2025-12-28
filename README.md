@@ -11,7 +11,7 @@ This project focuses on **engineering correctness**, **scalability**, and **test
 
 This Flutter app is built to showcase real-world application patterns commonly used in production systems.
 
-### Project Objective
+### 📌 Project Objective
 
 The goal of this project is to practice and demonstrate **real-world Flutter application architecture** and patterns commonly used in production mobile apps.
 
@@ -27,7 +27,7 @@ Key objectives:
 
 ---
 
-### Key Engineering Concepts Implemented
+### 🧠 Key Engineering Concepts Implemented
 
 - Clean Architecture
     - Domain / Data / Presentation separation
@@ -59,10 +59,10 @@ Key objectives:
 
 ---
 
-### Architecture Overview
+### 🏗️ Architecture Overview
 
 The app follows a **feature-based Clean Architecture** approach:
-    ```kotlin
+    ```bash
     features/
     ├── auth/
     │   ├── domain/
@@ -81,7 +81,7 @@ The app follows a **feature-based Clean Architecture** approach:
 
 
 **Data flow:**
-    ```nginx
+    ```bash
     UI → Bloc → UseCase → Repository → DataSource → API
 
 - UI dispatches events
@@ -97,33 +97,53 @@ This ensures:
 
 ---
 
-### Authentication & Token Refresh Flow
+### 🔐 Authentication & Token Refresh Flow
 
-- Login returns access & refresh tokens
-- Tokens are stored securely
-- Access token expiry is checked before API calls
-- If expired, a refresh is triggered
-- **Only one refresh request runs at a time**
-- Concurrent requests wait for the same refresh operation
-- User is logged out safely if refresh fails
+1. User logs in using credentials
+2. API returns:
+    - Access token (short-lived)
+    - Refresh token (long-lived)
+3. Tokens are stored securely
+4. Every API request checks token validity
+5. If access token is expired:
+    - RefreshManager triggers token refresh
+6. **Single-flight guarantee**:
+    - If refresh is already in progress, other requests wait
+7. On refresh success:
+    - Tokens updated
+    - Pending requests continue
+8. On refresh failure:
+    - User is logged out safely
+
+This design avoids:
+- Multiple refresh calls
+- Race conditions
+- Inconsistent auth state
 
 ---
 
-### Testing Strategy
+### 🧪 Testing Strategy
 
-Testing is focused on **behavior**, not UI rendering.
+Testing is focused on **behavior**, not implementation details.
 
-Tests include:
-- UseCase unit tests
-- BLoC tests (success, error, pagination, search)
-- Refresh token concurrency tests
-- JWT expiry handling tests
+What is tested
+- ✅ UseCases (success & failure)
+- ✅ BLoC state transitions
+- ✅ Pagination behavior
+- ✅ Debounced search logic
+- ✅ Refresh token concurrency
+- ✅ Refresh failure → logout
+- ✅ JWT expiry logic using real token payloads
 
-This ensures the app behaves correctly under real-world conditions.
+Why this matters
+- Tests are deterministic
+- No reliance on UI or timers
+- Concurrency logic is proven safe
+- Refactors are confidence-driven
 
 ---
 
-### Tech Stack
+### ⚙️ Tech Stack
 
 - Flutter
 - Dart
@@ -134,15 +154,21 @@ This ensures the app behaves correctly under real-world conditions.
 - http
 - secure_storage
 - JWT-based authentication
-- FastAPI (backend API)
+- Free opensource API (backend API)
 
 ---
 
-### Setup Instructions
+### 🛠️ Setup Instructions
+
+- Prerequisites
+    - Flutter (stable channel)
+    - Dart SDK
+    - Android Studio / VS Code
 
 1. Clone the repository:
    ```bash
    git clone <your-repo-url>
+   cd firstassignbloc
 2. Install dependencies:
    ```bash
    flutter pub get
@@ -152,3 +178,32 @@ This ensures the app behaves correctly under real-world conditions.
 4. Run tests:
    ```bash
    flutter test
+
+---
+
+### 📚 Key Learnings
+
+- How to design Flutter apps for long-term maintainability
+- How to handle auth safely in mobile apps
+- Why concurrency issues matter in token refresh logic
+- How to test async and debounced behavior correctly
+- Why architecture matters more than UI complexity
+
+---
+
+### 👤 Author
+
+Manishkumar Vishwakarma
+Full Stack Mobile App Developer (Flutter + Django/FastAPI)
+Focused on scalable architecture, state management, and testing.
+
+---
+
+### ⭐ Why This Project Matters
+
+This is not a tutorial-style Todo app.
+It is a production-thinking Flutter project that demonstrates:
+- Real auth challenges
+- Concurrency safety
+- Clean architecture discipline
+- Testing mindset
