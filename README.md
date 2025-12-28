@@ -68,12 +68,10 @@ The app follows a **feature-based Clean Architecture** approach:
     │   ├── domain/
     │   ├── data/
     │   └── presentation/
-    │
     ├── todo/
     │   ├── domain/
     │   ├── data/
     │   └── presentation/
-    │
     core/
     ├── network/
     ├── secure_storage/
@@ -193,9 +191,9 @@ Why this matters
 
 ### 👤 Author
 
-Manishkumar Vishwakarma
-Full Stack Mobile App Developer (Flutter + Django/FastAPI)
-Focused on scalable architecture, state management, and testing.
+- Manishkumar Vishwakarma
+- Full Stack Mobile App Developer (Flutter + Django/FastAPI)
+- Focused on scalable architecture, state management, and testing.
 
 ---
 
