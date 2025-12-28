@@ -80,7 +80,7 @@ The app follows a **feature-based Clean Architecture** approach:
 
 **Data flow:**
     ```bash
-    UI → Bloc → UseCase → Repository → DataSource → API
+    UI→Bloc→UseCase→Repository→DataSource→API
 
 - UI dispatches events
 - Bloc coordinates state changes
